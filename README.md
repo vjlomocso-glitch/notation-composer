@@ -41,6 +41,10 @@ There is no build step for the site itself: the files are served as they are.
 
 The repository must be public on a free GitHub plan. In **Settings → Pages**, set *Source* to *Deploy from a branch*, branch `main`, folder `/ (root)`. The site appears at `https://<owner>.github.io/notation-composer/` a minute or two later, and every push to `main` updates it.
 
+## Licence
+
+The Composer's own code and text are released into the public domain under [The Unlicense](UNLICENSE). The bundled KaTeX in `vendor/katex/` keeps its own MIT licence ([vendor/katex/LICENSE](vendor/katex/LICENSE)).
+
 ## For AI assistants and other contributors
 
 Read [AGENTS.md](AGENTS.md).

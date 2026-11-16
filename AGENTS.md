@@ -16,7 +16,8 @@ A generic composer for writing logic: prose plus LaTeX, typed with a key palette
 4. **Keep stored data readable.** Work is kept in `localStorage` under `notation-composer/v1`, and backups have `"app": "notation-composer", "version": 1`. `normalize()` in `js/app.js` must keep accepting every older backup. If the shape has to change, bump the version and migrate; never drop a user's documents.
 5. **Keep packs compatible.** A pack with format `notation-composer-pack/1` must keep importing. New pack fields must be optional.
 6. **Release.** When files are added, removed or renamed, update the list in `sw.js` and bump its `VERSION`. When the vendored KaTeX changes, update the version in README.md.
-7. **Say what changed** in the commit message. AI-written commits end with a co-author line naming the AI.
+7. **Public domain.** Contributions are released under The Unlicense (see `UNLICENSE`). Do not copy in code under another licence, except vendored libraries kept in `vendor/` with their own licence file.
+8. **Say what changed** in the commit message. AI-written commits end with a co-author line naming the AI.
 
 ## Where things are
 
