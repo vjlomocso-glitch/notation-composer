@@ -1,0 +1,59 @@
+{
+  "format": "notation-composer-pack/1",
+  "name": "Basic modal logic",
+  "description": "Box and diamond, the usual axiom names and necessitation. An example of the pack format.",
+  "updated": "2026-11-16",
+  "categories": [
+    {
+      "name": "Modal",
+      "macros": [
+        {
+          "name": "\\Nec",
+          "def": "\\Box"
+        },
+        {
+          "name": "\\Pos",
+          "def": "\\Diamond"
+        }
+      ],
+      "keys": [
+        {
+          "insert": "\\Nec #1",
+          "label": "\\Nec\\,◌"
+        },
+        {
+          "insert": "\\Pos #1",
+          "label": "\\Pos\\,◌"
+        },
+        "p",
+        "q",
+        "r",
+        "\\varphi",
+        "\\psi",
+        " \\vdash ",
+        " \\Vdash ",
+        "w",
+        "v",
+        "R",
+        "\\mathcal{M}",
+        "\\mathfrak{F}"
+      ]
+    },
+    {
+      "name": "Modal rules",
+      "rules": true,
+      "macros": [],
+      "keys": [
+        "\\mathrm{K}",
+        "\\mathrm{T}",
+        "\\mathrm{4}",
+        "\\mathrm{5}",
+        "\\mathrm{B}",
+        "\\mathrm{D}",
+        "\\mathrm{Nec}",
+        "\\mathrm{MP}",
+        "\\mathrm{Dual}"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Notation Composer",
+  "short_name": "Composer",
+  "description": "A LaTeX and prose composer for logic, with a key palette, macros, Fitch proofs and notation packs.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e7ebec",
+  "theme_color": "#e7ebec",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

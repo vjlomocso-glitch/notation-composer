@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Notation Composer</title>
+<meta name="description" content="A fixed-screen LaTeX and prose composer for logic: a customizable key palette, macros, a Fitch proof builder, importable notation packs and JSON backup.">
+<meta name="theme-color" content="#e7ebec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111416" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app" class="app" data-mode="edit" data-input="palette">
+  <header class="bar">
+    <div class="bar-in">
+      <button id="menuBtn" class="ib" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"></button>
+      <button id="docBtn" class="doc-btn" type="button" aria-label="Documents and projects">
+        <span id="docName" class="doc-name">Untitled</span>
+        <span id="projName" class="proj-name">Project</span>
+      </button>
+      <div class="seg" role="group" aria-label="View">
+        <button id="modeEdit" type="button" aria-pressed="true">Edit</button>
+        <button id="modePrev" type="button" aria-pressed="false">Preview</button>
+        <button id="modeFitch" type="button" aria-pressed="false">Fitch</button>
+        <button id="modeSplit" type="button" class="only-wide" aria-pressed="false">Split</button>
+      </div>
+      <button id="inputBtn" class="ib" type="button" aria-label="Use system keyboard"></button>
+    </div>
+    <div id="menu" class="menu" role="menu" hidden>
+      <button type="button" role="menuitem" data-act="projects">Projects &amp; documents</button>
+      <button type="button" role="menuitem" data-act="keys">Keys &amp; macros</button>
+      <hr>
+      <button type="button" role="menuitem" data-act="copy">Copy document <small>macros expanded</small></button>
+      <button type="button" role="menuitem" data-act="copyPre">Copy with LaTeX preamble</button>
+      <hr>
+      <button type="button" role="menuitem" data-act="backup">Backup &amp; restore <small id="backupAge"></small></button>
+      <div id="storeWarn" class="warn" hidden>This browser isn’t keeping your work. Save a backup before you leave.</div>
+    </div>
+  </header>
+
+  <main class="work">
+    <div class="pane pane-edit">
+      <div class="ed-wrap">
+        <pre id="hl" class="ed-hl" aria-hidden="true"></pre>
+        <textarea id="ed" class="ed" inputmode="none" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Document source"></textarea>
+      </div>
+    </div>
+    <div class="pane pane-prev" id="prevPane">
+      <article id="prev" class="paper" aria-label="Preview"></article>
+    </div>
+    <div class="pane pane-fitch" id="fxPane">
+      <div class="fx-view" id="fxView" aria-label="Proof"></div>
+      <div class="fx-edit" id="fxEdit" hidden>
+        <div class="fx-head"><span id="fxWhere"></span><span id="fxMsg" class="fx-msg"></span></div>
+        <input id="fxF" class="fx-in" type="text" placeholder="Formula" aria-label="Formula" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" enterkeyhint="next">
+        <div class="fx-row2">
+          <input id="fxR" class="fx-in" type="text" placeholder="Rule" aria-label="Rule" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" enterkeyhint="next">
+          <input id="fxC" class="fx-in" type="text" placeholder="Lines" aria-label="Lines cited" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" enterkeyhint="next">
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="pal" id="pal">
+    <div class="pal-in">
+      <div class="pal-top">
+        <div id="tabs" class="tabs" role="tablist" aria-label="Key categories"></div>
+        <div id="dots" class="dots"></div>
+      </div>
+      <div id="tools" class="tools" role="toolbar" aria-label="Editing tools"></div>
+      <div id="pages" class="pages" aria-label="Keys"></div>
+    </div>
+  </footer>
+
+  <section id="scrProjects" class="screen" hidden aria-label="Projects and documents"></section>
+  <section id="scrKeys" class="screen" hidden aria-label="Keys and macros"></section>
+  <section id="scrBackup" class="screen" hidden aria-label="Backup and restore"></section>
+  <div id="sheetHost" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script src="vendor/katex/katex.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // Works offline after the first visit. sw.js lists what it keeps.
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
