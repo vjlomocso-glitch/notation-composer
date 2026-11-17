@@ -767,10 +767,27 @@ const Core = (() => {
     return { s: out, n };
   }
 
+  /* ---------- copying for a chat ---------- */
+
+  // \( … \) becomes $…$ and \[ … \] becomes $$…$$, the delimiters chat apps render most
+  // reliably. Inline bodies are trimmed, since many renderers ignore "$ x $". A body that
+  // itself holds a dollar sign keeps its delimiters. Proof blocks and prose are untouched.
+  function dollarDelims(src) {
+    let out = '';
+    for (const g of segment(src)) {
+      const whole = src.slice(g.s, g.e);
+      if (g.k !== 'm' || src[g.s] !== '\\') { out += whole; continue; }
+      const body = src.slice(g.cs, g.ce);
+      if (body.includes('$') || !body.trim()) { out += whole; continue; }
+      out += g.d ? '$$' + body + '$$' : '$' + body.trim() + '$';
+    }
+    return out;
+  }
+
   return {
     SLOT, MACRO_NAME, esc, segment, runs, runsHTML, inlineMd, buildBlocks,
     fillTemplate, backspaceSpan, argCount, expandMacros, expandDoc, usedMacros, preamble,
-    replaceCS, renameInMath, mathContext,
+    replaceCS, renameInMath, mathContext, dollarDelims,
     parseProof, serializeProof, analyzeProof, citeTokens, citeFor, citeRewriter, proofToArray,
   };
 })();

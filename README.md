@@ -10,7 +10,7 @@ A small LaTeX and prose composer for logic, built for phones and tablets first. 
 - **Macros.** Keys can insert macros such as `\Cond`. Redefine one and every document in the project follows. Rename one and the documents and keys that use it are renamed too.
 - **Preview** renders prose and math together with KaTeX: `$…$` inline, `$$…$$` displayed.
 - **Fitch mode** builds a proof block line by line; line numbers and citations renumber themselves.
-- **Copy out** with macros expanded, or with a LaTeX preamble of `\newcommand`s.
+- **Copy out** with macros expanded and math between dollar signs, ready for a chat, or with a LaTeX preamble of `\newcommand`s.
 - **Notation packs** bring in the keys and macros of a particular notation from a small JSON file, and update them when the notation changes. See [packs/](packs/README.md).
 - **Backup and restore** of everything as one JSON file.
 

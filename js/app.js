@@ -881,7 +881,7 @@ Keys and macros for a particular language come in as a notation pack: a small JS
       }
       out = names.length ? C.preamble(names, MAC) + '\n\n' + body : body;
     } else {
-      out = C.expandDoc(v, MAC);
+      out = C.dollarDelims(C.expandDoc(v, MAC));
     }
     const n = out.split(SLOT).length - 1;
     const note = n ? ` ${n} unfilled slot${n > 1 ? 's' : ''} left in it.` : '';

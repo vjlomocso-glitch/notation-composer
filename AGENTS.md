@@ -40,5 +40,5 @@ Serve the folder (`python3 -m http.server`) and open it at a phone-sized viewpor
 
 ## Helping someone use it with an AI
 
-- **Copy document** (menu) expands every macro, so the AI sees plain LaTeX it can read. Use it when pasting formulas into a chat.
+- **Copy document** (menu) expands every macro, so the AI sees plain LaTeX it can read, and writes math between dollar signs (`\(…\)` becomes `$…$`, `\[…\]` becomes `$$…$$`), which chat apps render most reliably. Use it when pasting formulas into a chat. `Core.dollarDelims()` does the conversion.
 - To give someone your notation, write or update a pack and have them import it; do not ask them to edit categories by hand.
