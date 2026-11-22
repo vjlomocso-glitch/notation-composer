@@ -194,9 +194,10 @@ Keys and macros for a particular language come in as a notation pack: a small JS
       text: typeof x.text === 'string' ? x.text : '',
       updated: +x.updated || Date.now(),
       caret: Array.isArray(x.caret) ? [Math.max(0, +x.caret[0] || 0), Math.max(0, +x.caret[1] || 0)] : [0, 0],
+      ref: typeof x.ref === 'string' ? x.ref : '', // a pasted reply, shown in the reference pane
     }));
     if (!documents.length) {
-      documents = [{ id: uid('d'), projectId: projects[0].id, name: 'Untitled', text: '', updated: Date.now(), caret: [0, 0] }];
+      documents = [{ id: uid('d'), projectId: projects[0].id, name: 'Untitled', text: '', updated: Date.now(), caret: [0, 0], ref: '' }];
     }
     const st = d.settings || {};
     return {
@@ -204,6 +205,8 @@ Keys and macros for a particular language come in as a notation pack: a small JS
       settings: {
         rows: ['auto', '2', '3'].includes(String(st.rows)) ? String(st.rows) : 'auto',
         mode: ['edit', 'preview', 'split', 'fitch'].includes(st.mode) ? st.mode : 'edit',
+        refOpen: !!st.refOpen,
+        refFold: !!st.refFold,
       },
       categories, projects, documents,
       activeDocId: documents.some(x => x.id === d.activeDocId) ? String(d.activeDocId) : documents[0].id,
@@ -791,6 +794,156 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     saveCaretSoon();
   });
 
+  /* ---------- reference pane: a pasted reply above the editor ---------- */
+  // Each document keeps one reply, usually the one it answers. Tap a formula or a piece of code
+  // in it to insert it at the cursor, so quoting needs no retyping.
+  const refPane = document.createElement('div');
+  refPane.className = 'ref';
+  refPane.id = 'refPane';
+  refPane.hidden = true;
+  refPane.innerHTML = `<div class="ref-bar">
+      <button type="button" class="ref-fold" id="refFold" aria-expanded="true" aria-controls="refBody">${IC.down}<span>Reference</span></button>
+      <span class="grow"></span>
+      <button type="button" class="ref-btn" data-ref="paste">Paste</button>
+      <button type="button" class="ref-btn" data-ref="edit">Edit</button>
+      <button type="button" class="ib sm" data-ref="hide" aria-label="Hide the reference pane" title="Hide the reference pane">${IC.close}</button>
+    </div>
+    <div class="ref-body paper" id="refBody" aria-label="Reference"></div>`;
+  document.querySelector('.pane-edit').prepend(refPane);
+  const refBody = refPane.querySelector('#refBody');
+  let refBits = [];
+
+  function refTex(body, display) {
+    try { return texRaw(body, display, MAC, false); }
+    catch (err) {
+      try { return texRaw(body, display, MAC, false, true); }
+      catch (e2) { return `<span class="tex-err" title="${esc(errText(err))}">${esc(body)}</span>`; }
+    }
+  }
+  function renderRef() {
+    const open = !!S.settings.refOpen;
+    refPane.hidden = !open;
+    if (!open) return;
+    const fold = !!S.settings.refFold;
+    const t = curDoc().ref || '';
+    refPane.classList.toggle('folded', fold);
+    $('refFold').setAttribute('aria-expanded', String(!fold));
+    refPane.querySelector('[data-ref="edit"]').hidden = !t.trim();
+    if (!t.trim()) {
+      refBits = [];
+      refBody.innerHTML = `<p class="ref-empty">Paste a reply from a chat to quote from it. Tap a formula, or a piece of code, to insert it at the cursor.</p>
+        <div class="btn-row"><button type="button" class="btn primary" data-ref="paste">Paste a reply</button></div>`;
+      return;
+    }
+    const r = C.refBlocks(t, refTex);
+    refBits = r.bits;
+    refBody.innerHTML = r.html;
+  }
+  function setRef(text, msg) {
+    curDoc().ref = text;
+    S.settings.refOpen = true;
+    S.settings.refFold = false;
+    persist();
+    renderRef();
+    refBody.scrollTop = 0;
+    requestAnimationFrame(revealCaret);
+    if (msg) toast(msg);
+  }
+  function setRefOpen(on) {
+    S.settings.refOpen = on;
+    if (on) S.settings.refFold = false;
+    persist();
+    if (on && (S.settings.mode === 'preview' || S.settings.mode === 'fitch')) setMode('edit');
+    renderRef();
+    requestAnimationFrame(() => { if (S.settings.mode !== 'fitch') revealCaret(); });
+  }
+  async function refPaste() {
+    const had = !!curDoc().ref.trim();
+    let t = '';
+    try { if (navigator.clipboard && navigator.clipboard.readText) t = await navigator.clipboard.readText(); } catch (e) { t = ''; }
+    if (t && t.trim()) setRef(t, had ? 'Reply replaced' : 'Reply pasted');
+    else refSheet(true);
+  }
+  // The reply as text: to paste where the clipboard can't be read, or to fix what was pasted.
+  function refSheet(forPaste) {
+    const cur = curDoc().ref || '';
+    const host = $('sheetHost');
+    host.innerHTML = `<div class="sheet-wrap" data-scrim="1"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="refTitle">
+      <div class="sheet-head"><h3 id="refTitle">Reference</h3></div>
+      <p class="hint">${forPaste ? 'This view can’t read your clipboard. Paste the reply below.' : 'The reply as it was pasted. Edit it, or paste another over it.'}</p>
+      <textarea class="fld-in mono" id="refText" rows="10" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="Paste a reply here"${forPaste ? ' data-paste="1"' : ''}>${esc(forPaste ? '' : cur)}</textarea>
+      <div class="btn-row">${cur.trim() ? '<button type="button" class="btn danger" data-act="refClear">Clear</button>' : ''}<span class="grow"></span>
+        <button type="button" class="btn" data-act="sheetClose">Cancel</button><button type="button" class="btn primary" data-act="refUse">Use</button></div>
+    </div></div>`;
+    host.hidden = false;
+    $('refText').focus();
+  }
+  // A formula goes in with its own delimiters when the cursor is in prose, and as a bare body
+  // when the cursor is already inside a formula. Code goes in exactly as it was.
+  function insertRef(i, el) {
+    const b = refBits[i];
+    if (!b) return;
+    const v = ed.value, s = ed.selectionStart, e = ed.selectionEnd;
+    let text;
+    if (b.kind === 'code') text = b.src;
+    else {
+      const body = b.src.trim();
+      const ctx = C.mathContext(v, s);
+      if (ctx.kind === 'in' || ctx.kind === 'open') text = body;
+      else if (b.d) {
+        const bol = s === 0 || v[s - 1] === '\n', eol = e >= v.length || v[e] === '\n';
+        text = (bol ? '' : '\n') + (body.includes('\n') ? '$$\n' + body + '\n$$' : '$$' + body + '$$') + (eol ? '' : '\n');
+      } else {
+        text = '$' + body + '$';
+        if (s > 0 && !/[\s([{]/.test(v[s - 1])) text = ' ' + text;
+        if (e < v.length && !/[\s.,;:!?)\]}]/.test(v[e])) text += ' ';
+      }
+    }
+    replaceRange(s, e, text, s + text.length, s + text.length, 'op');
+    if (el) { el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 650); }
+  }
+  refPane.addEventListener('click', e => {
+    const b = e.target.closest('[data-ref]');
+    if (b) {
+      const a = b.dataset.ref;
+      if (a === 'paste') refPaste();
+      else if (a === 'edit') refSheet(false);
+      else if (a === 'hide') setRefOpen(false);
+      return;
+    }
+    if (e.target.closest('#refFold')) {
+      S.settings.refFold = !S.settings.refFold;
+      persist();
+      renderRef();
+      requestAnimationFrame(revealCaret);
+      return;
+    }
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed && refBody.contains(sel.anchorNode)) return;
+    const hit = e.target.closest('[data-ri]');
+    if (hit && refBody.contains(hit)) insertRef(+hit.dataset.ri, hit);
+  });
+
+  /* ---------- copy & new: the prompt loop ---------- */
+  // Copy the document for a chat, then start a fresh one in the same project. The one just
+  // copied keeps its place in the project's documents, named from its first line if it had no name.
+  function nameFrom(text) {
+    const line = text.split('\n').map(x => x.trim()).find(x => x && !/^```/.test(x)) || '';
+    let n = '';
+    for (const g of C.segment(line)) n += g.k === 't' ? line.slice(g.s, g.e) : ' … ';
+    n = n.replace(/^#+\s*/, '').replace(/[*_`]/g, '').replace(/\s+/g, ' ').replace(/(\s*…\s*)+/g, ' … ').trim();
+    if (!n || n === '…') n = 'Copied ' + new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return n.length > 48 ? n.slice(0, 47).trimEnd() + '…' : n;
+  }
+  function copyAndNew() {
+    if (S.settings.mode === 'preview' || S.settings.mode === 'fitch') setMode('edit');
+    const d = curDoc();
+    if (!ed.value.trim()) { toast('Nothing to copy yet'); return; }
+    copyDoc(false, 'Copied. This is a new document.');
+    if (d.name === 'Untitled') d.name = nameFrom(ed.value);
+    openDoc(newDoc(d.projectId).id);
+  }
+
   /* ---------- modes ---------- */
   function setMode(m) {
     if (m === 'split' && !wideMQ.matches) m = 'edit';
@@ -848,6 +1001,7 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     menu.hidden = !open;
     $('menuBtn').setAttribute('aria-expanded', String(open));
     if (open) $('backupAge').textContent = S.lastExport ? 'last ' + ago(S.lastExport) : 'never saved';
+    if (open && $('refState')) $('refState').textContent = S.settings.refOpen ? 'shown' : 'hidden';
   }
   $('menuBtn').addEventListener('click', () => openMenu(menu.hidden));
   menu.addEventListener('click', e => {
@@ -866,10 +1020,12 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     else if (a === 'keys') openKeys();
     else if (a === 'copy') copyDoc(false);
     else if (a === 'copyPre') copyDoc(true);
+    else if (a === 'copyNew') copyAndNew();
+    else if (a === 'ref') setRefOpen(!S.settings.refOpen);
     else if (a === 'backup') openBackup();
   }
 
-  function copyDoc(withPreamble) {
+  function copyDoc(withPreamble, okMsg) {
     const v = ed.value;
     let out;
     if (withPreamble) {
@@ -885,7 +1041,7 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     }
     const n = out.split(SLOT).length - 1;
     const note = n ? ` ${n} unfilled slot${n > 1 ? 's' : ''} left in it.` : '';
-    copyText(out, (withPreamble ? 'Copied with preamble.' : 'Copied with macros expanded.') + note);
+    copyText(out, (okMsg || (withPreamble ? 'Copied with preamble.' : 'Copied with macros expanded.')) + note);
   }
   function copyText(text, okMsg) {
     let p = null;
@@ -960,12 +1116,13 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     buildPalette();
     renderHL();
     if (S.settings.mode === 'preview' || S.settings.mode === 'split') renderPreview();
+    renderRef();
     if (S.settings.mode === 'fitch') fxEnter();
     else requestAnimationFrame(revealCaret);
     persist();
   }
   function newDoc(pid) {
-    const d = { id: uid('d'), projectId: pid, name: 'Untitled', text: '', updated: Date.now(), caret: [0, 0] };
+    const d = { id: uid('d'), projectId: pid, name: 'Untitled', text: '', updated: Date.now(), caret: [0, 0], ref: '' };
     S.documents.push(d);
     persist();
     return d;
@@ -995,6 +1152,7 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     renderHL();
     if (S.settings.mode === 'preview' || S.settings.mode === 'split') renderPreview();
     if (S.settings.mode === 'fitch') fxRender();
+    renderRef();
     persist();
   }
 
@@ -1014,6 +1172,7 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     buildPalette();
     renderHL();
     if (S.settings.mode === 'preview' || S.settings.mode === 'split') renderPreview();
+    renderRef();
     if (S.settings.mode === 'fitch') { fxLoad(); fxFill(); fxRender(); }
   }
   const backBtn = (act, label) => `<button type="button" class="ib" data-act="${act}" aria-label="${label}">${IC.back}</button>`;
@@ -1660,6 +1819,14 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     if (!b) return;
     const a = b.dataset.act;
     if (a === 'sheetClose') { closeSheet(); return; }
+    if (a === 'refUse') {
+      const ta = $('refText'), t = ta.value;
+      closeSheet();
+      if (!t.trim() && ta.dataset.paste) return; // nothing pasted: keep what was there
+      setRef(t, t.trim() ? 'Reply set' : 'Reference cleared');
+      return;
+    }
+    if (a === 'refClear') { if (!armed(b, 'Tap again')) return; closeSheet(); setRef('', 'Reference cleared'); return; }
     if (!sheetKey) return;
     const c = catById(sheetKey.cid);
     const idx = sheetKey.kid ? c.keys.findIndex(x => x.id === sheetKey.kid) : -1;

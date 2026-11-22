@@ -132,7 +132,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .app[data-mode="fitch"] .pane-fitch { display: flex; flex-direction: column; }
 .app[data-mode="split"] .pane-prev { border-left: 1px solid var(--line); }
 
-.ed-wrap { position: absolute; inset: 0; }
+.pane-edit { display: flex; flex-direction: column; }
+.ed-wrap { position: relative; flex: 1; min-height: 0; }
 .ed, .ed-hl {
   position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0;
   padding: 14px var(--gut-r) 48px var(--gut-l);
@@ -152,6 +153,45 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .h-brace, .h-delim, .h-mark { color: var(--muted); }
 .h-head { color: var(--ink); }
 .h-slot { color: var(--slot); background: var(--slot-soft); border-radius: 3px; box-shadow: inset 0 0 0 1px var(--slot); }
+
+/* reference pane: a pasted reply above the editor; tap a formula to insert it */
+.ref { flex: none; max-height: 46%; display: flex; flex-direction: column; border-bottom: 1px solid var(--line); background: var(--bg); }
+.ref[hidden] { display: none; }
+.ref-bar { flex: none; display: flex; align-items: center; gap: 6px; min-height: 42px; padding: 4px calc(var(--gut-r) - 8px) 4px calc(var(--gut-l) - 8px); }
+.ref-fold {
+  display: flex; align-items: center; gap: 4px; height: 34px; padding: 0 8px 0 4px; border: 0; border-radius: 8px;
+  background: transparent; font: 600 13px var(--font-ui); color: var(--muted);
+}
+.ref-fold:hover { background: var(--accent-soft); }
+.ref-fold svg { transition: transform 0.15s; }
+.ref.folded .ref-fold svg { transform: rotate(-90deg); }
+.ref.folded .ref-body { display: none; }
+.ref-btn { height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font: 600 13px var(--font-ui); color: var(--ink); }
+.ref-btn:hover { border-color: var(--key-edge); }
+.ref-btn[hidden] { display: none; }
+.ref-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); border-top: 1px solid var(--line); }
+.ref-body.paper { max-width: none; margin: 0; padding: 10px var(--gut-r) 16px var(--gut-l); font-size: 16px; line-height: 1.5; }
+.ref-body p { margin: 0 0 0.7em; }
+.ref-body .ref-empty { color: var(--muted); font: 14px/1.5 var(--font-ui); margin: 4px 0 10px; }
+.ref-body [data-ri] { cursor: pointer; border-radius: 4px; transition: background 0.15s, box-shadow 0.15s; }
+.ref-body .im[data-ri] { padding: 1px 2px; margin: 0 -2px; }
+.ref-body [data-ri]:hover { background: var(--accent-soft); }
+.ref-body [data-ri].hit { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+.ref-body .ref-disp { display: block; overflow-x: auto; overflow-y: hidden; padding: 4px 2px; margin: 0.2em 0 0.7em; }
+.ref-body .ref-disp .katex-display { margin: 0; }
+.ref-body .ref-h { font-weight: 700; line-height: 1.3; margin: 0.9em 0 0.4em; }
+.ref-body .ref-h:first-child { margin-top: 0.2em; }
+.ref-body .ref-h1 { font-size: 1.2em; } .ref-body .ref-h2 { font-size: 1.1em; } .ref-body .ref-h3, .ref-body .ref-h4 { font-size: 1em; }
+.ref-body ul, .ref-body ol { margin: 0 0 0.7em; padding-left: 1.4em; }
+.ref-body li > p { margin: 0 0 0.3em; }
+.ref-body li > ul, .ref-body li > ol { margin-bottom: 0.3em; }
+.ref-body blockquote { margin: 0 0 0.7em; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.ref-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 0 0 0.8em; font-size: 0.92em; }
+.ref-body th, .ref-body td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.ref-body hr { border: 0; border-top: 1px solid var(--line); margin: 0.9em 0; }
+.ref-body code { font: 0.84em var(--font-src); background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.ref-body pre.ref-code { font: 13px/1.5 var(--font-src); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); padding: 8px 10px; border-radius: 8px; margin: 0 0 0.8em; }
+.ref-body .ref-link { text-decoration: underline; text-decoration-color: var(--line); }
 
 /* preview: the document set like a LaTeX article */
 .pane-prev { overflow-y: auto; overscroll-behavior: contain; }
@@ -450,7 +490,7 @@ details.paste[open] summary { margin-bottom: 8px; }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 @media (prefers-reduced-motion: reduce) {
-  .toast { transition: none; }
+  .toast, .ref-fold svg, .ref-body [data-ri] { transition: none; }
   .key.down, .tool.down { transform: none; }
 }
 

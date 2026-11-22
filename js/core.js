@@ -784,7 +784,156 @@ const Core = (() => {
     return out;
   }
 
+  /* ---------- a pasted reply, for the reference pane ---------- */
+
+  // A reply copied from a chat, set read-only. It takes the Markdown chat apps write: headings,
+  // lists, quotes, tables, rules, code, bold and italic, with math in $…$, $$…$$, \(…\) or \[…\].
+  // tex(body, display) returns the HTML for one formula. Returns { html, bits }: every formula,
+  // code span and code block is one bit ({ kind: 'math' | 'code', src, d }), and its element
+  // carries data-ri = its index, so a tap can insert it.
+  // Code and math are swapped for placeholders before the Markdown is read, so a | or * inside
+  // a formula never splits a table or starts a list.
+  const PH = /(\d+)/g;
+  function refBlocks(src, tex) {
+    const bits = [], hold = [], blockPh = new Set();
+    const ph = (html, block) => {
+      hold.push(html);
+      if (block) blockPh.add(hold.length - 1);
+      return '' + (hold.length - 1) + '';
+    };
+    src = String(src || '').replace(/\r\n?/g, '\n').replace(/[]/g, '');
+
+    // Fenced code blocks, line by line; an unclosed fence runs to the end.
+    const lines = src.split('\n'), kept = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = /^[ \t]*(`{3,}|~{3,})[ \t]*([^\n`]*)$/.exec(lines[i]);
+      if (!m) { kept.push(lines[i]); continue; }
+      const closeRe = new RegExp('^[ \\t]*\\' + m[1][0] + '{' + m[1].length + ',}[ \\t]*$');
+      const body = [];
+      let j = i + 1;
+      while (j < lines.length && !closeRe.test(lines[j])) body.push(lines[j++]);
+      const code = body.join('\n');
+      bits.push({ kind: 'code', src: code, lang: m[2].trim() });
+      kept.push(ph(`<pre class="ref-code" data-ri="${bits.length - 1}">${esc(code)}</pre>`, true));
+      i = j;
+    }
+    let text = kept.join('\n');
+
+    // Code spans.
+    text = text.replace(/(`+)([^`\n](?:[^\n]*?[^`\n])?)\1(?!`)/g, (all, ticks, body) => {
+      const code = body.length > 2 && body[0] === ' ' && body[body.length - 1] === ' ' ? body.slice(1, -1) : body;
+      bits.push({ kind: 'code', src: code });
+      return ph(`<code data-ri="${bits.length - 1}">${esc(code)}</code>`);
+    });
+
+    // Math.
+    let withMath = '';
+    for (const g of segment(text)) {
+      if (g.k !== 'm') { withMath += text.slice(g.s, g.e); continue; }
+      const body = text.slice(g.cs, g.ce);
+      bits.push({ kind: 'math', src: body, d: g.d });
+      const i = bits.length - 1;
+      // A displayed formula alone on its line is a block of its own; beside text it stays in the paragraph.
+      withMath += ph(g.d
+        ? `<span class="ref-disp" data-ri="${i}">${tex(body, true)}</span>`
+        : `<span class="im" data-ri="${i}">${tex(body, false)}</span>`, g.d);
+    }
+
+    const out = [];
+    refLines(withMath.split('\n'), out, blockPh);
+    const html = out.join('').replace(PH, (m, i) => hold[+i]);
+    return { html, bits };
+  }
+
+  function refInline(s) {
+    let h = esc(s).replace(/\\([\\`*_{}[\]()#+\-.!|$~])/g, '$1');
+    h = h.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/(^|[^\w])__(?=\S)([\s\S]*?\S)__(?!\w)/g, '$1<strong>$2</strong>');
+    h = h.replace(/(^|[^*\w])\*(?=\S)([^*]*?\S)\*(?![*\w])/g, '$1<em>$2</em>');
+    h = h.replace(/(^|[^\w])_(?=\S)([^_]*?\S)_(?!\w)/g, '$1<em>$2</em>');
+    h = h.replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<del>$1</del>');
+    h = h.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, '<span class="ref-link" title="$2">$1</span>');
+    return h;
+  }
+
+  const indentOf = s => { let n = 0; for (const ch of s) { if (ch === ' ') n++; else if (ch === '\t') n += 4; else break; } return n; };
+  const TABLE_SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+  const cellsOf = line => line.trim().replace(/^\|/, '').replace(/(^|[^\\])\|$/, '$1').split(/(?<!\\)\|/).map(c => c.trim());
+
+  // Markdown blocks, for refBlocks. Paragraph lines keep their line breaks.
+  function refLines(lines, out, blockPh) {
+    let para = null, lastBlank = false;
+    const stack = []; // open lists: { ind, cind, tag }
+    const flush = () => { if (para) { out.push(`<p>${para.join('<br>')}</p>`); para = null; } };
+    const closeTop = () => { flush(); out.push(`</li></${stack.pop().tag}>`); };
+    const closeAll = () => { while (stack.length) closeTop(); };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) { flush(); lastBlank = true; continue; }
+      const ind = indentOf(line);
+      const t = line.trim();
+      const li = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+(.*)$/.exec(line);
+      const hr = /^([-*_])([ \t]*\1){2,}$/.test(t);
+      if (li && !hr) {
+        flush();
+        const tag = /\d/.test(li[2]) ? 'ol' : 'ul';
+        const cind = indentOf(li[1]) + li[2].length + 1;
+        while (stack.length && ind < stack[stack.length - 1].ind) closeTop();
+        const top = stack[stack.length - 1];
+        if (top && ind < top.cind && top.tag === tag) out.push('</li><li>');
+        else {
+          if (top && ind < top.cind) closeTop();
+          const start = tag === 'ol' && parseInt(li[2], 10) !== 1 ? ` start="${parseInt(li[2], 10)}"` : '';
+          out.push(`<${tag}${start}><li>`);
+          stack.push({ ind, cind, tag });
+        }
+        para = [refInline(li[3])];
+        lastBlank = false;
+        continue;
+      }
+      if (stack.length && lastBlank) while (stack.length && ind < stack[stack.length - 1].cind) closeTop();
+      lastBlank = false;
+      const hm = /^(#{1,6})[ \t]+(.*?)[ \t#]*$/.exec(t);
+      if (hm) {
+        flush(); closeAll();
+        out.push(`<div class="ref-h ref-h${Math.min(hm[1].length, 4)}">${refInline(hm[2])}</div>`);
+        continue;
+      }
+      if (hr) { flush(); closeAll(); out.push('<hr>'); continue; }
+      const only = /^(\d+)$/.exec(t);
+      if (only && blockPh.has(+only[1])) { flush(); out.push(t); continue; }
+      if (/^>/.test(t)) {
+        flush();
+        const inner = [];
+        while (i < lines.length && /^\s*>/.test(lines[i])) inner.push(lines[i++].replace(/^\s*> ?/, ''));
+        i--;
+        const sub = [];
+        refLines(inner, sub, blockPh);
+        out.push(`<blockquote>${sub.join('')}</blockquote>`);
+        continue;
+      }
+      if (t.includes('|') && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+        flush();
+        const head = cellsOf(line);
+        let rows = '';
+        i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
+          rows += '<tr>' + cellsOf(lines[i]).map(c => `<td>${refInline(c)}</td>`).join('') + '</tr>';
+          i++;
+        }
+        i--;
+        out.push(`<table><thead><tr>${head.map(c => `<th>${refInline(c)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`);
+        continue;
+      }
+      if (!para) para = [];
+      para.push(refInline(t));
+    }
+    flush();
+    closeAll();
+  }
+
   return {
+    refBlocks,
     SLOT, MACRO_NAME, esc, segment, runs, runsHTML, inlineMd, buildBlocks,
     fillTemplate, backspaceSpan, argCount, expandMacros, expandDoc, usedMacros, preamble,
     replaceCS, renameInMath, mathContext, dollarDelims,

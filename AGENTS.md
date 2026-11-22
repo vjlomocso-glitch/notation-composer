@@ -41,4 +41,6 @@ Serve the folder (`python3 -m http.server`) and open it at a phone-sized viewpor
 ## Helping someone use it with an AI
 
 - **Copy document** (menu) expands every macro, so the AI sees plain LaTeX it can read, and writes math between dollar signs (`\(…\)` becomes `$…$`, `\[…\]` becomes `$$…$$`), which chat apps render most reliably. Use it when pasting formulas into a chat. `Core.dollarDelims()` does the conversion.
+- **Copy & new** (menu) does the same copy, then opens a fresh document in the same project. It is the step between one prompt and the next.
+- The **reference pane** shows a pasted reply, so its formulas can be quoted with a tap instead of retyped. `Core.refBlocks()` reads the reply; it is a separate, more forgiving Markdown reader than the document's own (`buildBlocks`), because it takes what chat apps write (lists, tables, quotes, code). Formulas there are rendered with the project's macros, so a reply that writes out what a macro stands for and one that uses the macro both render.
 - To give someone your notation, write or update a pack and have them import it; do not ask them to edit categories by hand.

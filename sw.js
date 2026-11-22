@@ -1,7 +1,7 @@
 /* Offline support. On the first visit every file below is kept; afterwards each request is
    answered from that copy at once and refreshed from the network in the background, so a new
    release shows on the next visit. Bump VERSION when files are added, removed or renamed. */
-const VERSION = '2026-11-16.1';
+const VERSION = '2026-11-23.1';
 const CACHE = 'notation-composer-' + VERSION;
 const FILES = [
   "./",
