@@ -421,6 +421,133 @@ const Core = (() => {
     return out;
   }
 
+  /* ---------- writing a formula back in the project's macros ---------- */
+
+  // The reverse of expandMacros, for formulas quoted from a chat, where an assistant wrote out
+  // what a macro stands for: with \insome{#1} = \langle #1\rangle, "\langle a \land \langle b
+  // \rangle\rangle" becomes "\insome{a \land \insome{b}}". Only macros that are notation are
+  // undone: those with arguments, and those whose definition is more than one command or
+  // symbol. A plain renaming, such as \Cond for \to, is left alone, since writing \to is a
+  // choice of style. An argument is taken only when it is balanced: in braces, in \left…\right,
+  // and in the macro's own outer delimiters, so nested brackets pair up the right way.
+  // Brackets right after these belong to them (\left[, \sqrt[3], \\[2pt]), never to a macro.
+  const NO_MATCH_AFTER = /(\\(left|right|middle|[bB]igg?[lrm]?|sqrt)|\\\\)\s*$/;
+  function contractSpecs(M) {
+    const specs = [];
+    for (const name of Object.keys(M)) {
+      if (!MACRO_NAME.test(name)) continue;
+      let def = String(M[name]);
+      if (def.includes('##')) continue;
+      def = expandMacros(def, M).trim();
+      if (!def) continue;
+      const parts = def.split(/#([1-9])/);
+      const lits = [], order = [];
+      for (let i = 0; i < parts.length; i++) (i % 2 ? order : lits).push(i % 2 ? +parts[i] : parts[i]);
+      if (!order.length) {
+        // No arguments: only something longer than a single command or symbol.
+        if (/^(\\[A-Za-z]+|\\.|.)$/u.test(def)) continue;
+      } else {
+        if (order.some((d, i) => d !== i + 1)) continue;      // #1, #2 … once each, in order
+        if (!lits[0].trim() || !lits[lits.length - 1].trim()) continue; // both ends delimited
+        if (lits.slice(1, -1).some(l => !l.trim())) continue; // args separated
+      }
+      const re = lits.map(l => {
+        const t = l.trim();
+        if (!t) return null;
+        let r = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+        if (/\\[A-Za-z]+$/.test(t)) r += '(?![A-Za-z])';
+        return r;
+      });
+      // The opening literal must start right here; later ones may follow a space.
+      specs.push({ name, n: order.length, lits: re.map((r, i) => r && new RegExp((i ? '\\s*' : '') + r, 'y')), len: def.length,
+        open: re[0] && new RegExp(re[0], 'g'), close: re[re.length - 1] && new RegExp(re[re.length - 1], 'g') });
+    }
+    return specs.sort((a, b) => b.len - a.len);
+  }
+  function balancedArg(s, sp) {
+    let depth = 0, lr = 0;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === '\\') {
+        const m = /^\\(left|right)(?![A-Za-z])/.exec(s.slice(i));
+        if (m) { lr += m[1] === 'left' ? 1 : -1; if (lr < 0) return false; }
+        i++;
+        continue;
+      }
+      if (ch === '{') depth++;
+      else if (ch === '}' && --depth < 0) return false;
+    }
+    if (depth || lr) return false;
+    if (sp.n && sp.open && sp.close && sp.open.source !== sp.close.source) {
+      // The macro's own delimiters must pair up inside the argument.
+      const ev = [];
+      for (const [re, d] of [[sp.open, 1], [sp.close, -1]]) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(s))) { ev.push([m.index, d]); if (!m[0]) re.lastIndex++; }
+      }
+      ev.sort((a, b) => a[0] - b[0]);
+      let c = 0;
+      for (const [, d] of ev) { c += d; if (c < 0) return false; }
+      if (c) return false;
+    }
+    return true;
+  }
+  function contractMacros(s, M, specs) {
+    specs = specs || contractSpecs(M);
+    if (!specs.length) return s;
+    let out = '', i = 0;
+    const n = s.length;
+    outer: while (i < n) {
+      if (!NO_MATCH_AFTER.test(out)) {
+        for (const sp of specs) {
+          sp.lits[0].lastIndex = i;
+          const m0 = sp.lits[0].exec(s);
+          if (!m0 || m0.index !== i) continue;
+          let k = sp.lits[0].lastIndex;
+          if (k === i) continue;
+          const args = [];
+          let ok = true;
+          for (let a = 1; a <= sp.n && ok; a++) {
+            const sep = sp.lits[a];
+            ok = false;
+            for (let j = k; j <= n; j++) {
+              sep.lastIndex = j;
+              const m = sep.exec(s);
+              if (!m || m.index !== j) continue;
+              const arg = s.slice(k, j);
+              if (!balancedArg(arg, sp)) continue;
+              args.push(arg);
+              k = sep.lastIndex;
+              ok = true;
+              break;
+            }
+          }
+          if (!ok) continue;
+          let rep = sp.name;
+          for (let arg of args) {
+            arg = arg.trim();
+            if (arg[0] === '{' && matchBrace(arg, 0) === arg.length - 1) arg = arg.slice(1, -1);
+            rep += '{' + contractMacros(arg, M, specs) + '}';
+          }
+          if (!sp.n && k < n && /[A-Za-z]/.test(s[k])) rep += ' ';
+          out += rep;
+          i = k;
+          continue outer;
+        }
+      }
+      // Copy one token: a whole control word, so a match never starts inside one.
+      if (s[i] === '\\') {
+        let j = i + 1;
+        if (j < n && /[A-Za-z]/.test(s[j])) { while (j < n && /[A-Za-z]/.test(s[j])) j++; }
+        else j = Math.min(n, j + 1);
+        out += s.slice(i, j);
+        i = j;
+      } else { out += s[i]; i++; }
+    }
+    return out;
+  }
+
   function expandDoc(src, M) {
     let out = '';
     for (const g of segment(src)) {
@@ -933,7 +1060,7 @@ const Core = (() => {
   }
 
   return {
-    refBlocks,
+    refBlocks, contractMacros,
     SLOT, MACRO_NAME, esc, segment, runs, runsHTML, inlineMd, buildBlocks,
     fillTemplate, backspaceSpan, argCount, expandMacros, expandDoc, usedMacros, preamble,
     replaceCS, renameInMath, mathContext, dollarDelims,

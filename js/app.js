@@ -878,7 +878,8 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     host.hidden = false;
     $('refText').focus();
   }
-  // A formula goes in with its own delimiters when the cursor is in prose, and as a bare body
+  // A formula goes in written with the project's macros where it spelled them out (see
+  // Core.contractMacros): with its own delimiters when the cursor is in prose, as a bare body
   // when the cursor is already inside a formula. Code goes in exactly as it was.
   function insertRef(i, el) {
     const b = refBits[i];
@@ -887,7 +888,7 @@ Keys and macros for a particular language come in as a notation pack: a small JS
     let text;
     if (b.kind === 'code') text = b.src;
     else {
-      const body = b.src.trim();
+      const body = C.contractMacros(b.src.trim(), MAC);
       const ctx = C.mathContext(v, s);
       if (ctx.kind === 'in' || ctx.kind === 'open') text = body;
       else if (b.d) {
