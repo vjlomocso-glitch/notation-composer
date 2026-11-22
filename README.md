@@ -2,7 +2,7 @@
 
 A small LaTeX and prose composer for logic, built for phones and tablets first. Type with a palette of keys instead of the system keyboard, keep notation as macros you can redefine in one place, build Fitch-style proofs line by line, and copy the result out with the macros expanded, ready to paste into a chat with an AI or into a LaTeX document.
 
-**Use it:** https://vjlomocso-glitch.github.io/notation-composer/ (once GitHub Pages is switched on for this repository; see below).
+**Use it:** https://vjlomocso-glitch.github.io/notation-composer/.
 
 ## What it does
 
